@@ -49,8 +49,8 @@ def classification_scores(y_true, y_pred, threshold=0.5):
 
     Parameters
     ----------
-    y_true (numpy.ndarray of shape (n_samples,)): Ground truth
-    y_pred (numpy.ndarray of shape (n_samples,)): Predicted probabilities
+    y_true (numpy.ndarray of shape (n_samples)): Ground truth
+    y_pred (numpy.ndarray of shape (n_samples)): Predicted probabilities
     threshold (float): Rounding threshold
 
     Returns
