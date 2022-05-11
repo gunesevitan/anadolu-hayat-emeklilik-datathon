@@ -25,8 +25,8 @@ class LightGBMTrainer:
 
         Parameters
         ----------
-        df_train (pandas.DataFrame of shape (634112,, n_columns)): Training dataframe of features, target and folds
-        df_test (pandas.DataFrame of shape (243137,, n_columns)): Test dataframe of features
+        df_train (pandas.DataFrame of shape (634112, n_columns)): Training dataframe of features, target and folds
+        df_test (pandas.DataFrame of shape (243137, n_columns)): Test dataframe of features
         """
 
         print(f'{"-" * 30}\nRunning LightGBM Model for Training\n{"-" * 30}\n')
