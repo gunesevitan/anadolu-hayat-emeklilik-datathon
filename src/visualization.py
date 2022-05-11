@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.metrics import auc
 import matplotlib.pyplot as plt
 
 
@@ -48,7 +49,7 @@ def visualize_scores(df_scores, path=None):
     Parameters
     ----------
     df_scores (pandas.DataFrame of shape (n_folds, 6)): DataFrame of binary classification scores
-    path (str): Path of the output file
+    path (str or None): Path of the output file (if path is None, plot is displayed with selected backend)
     """
 
     # Create mean and std of scores for error bars
@@ -72,6 +73,64 @@ def visualize_scores(df_scores, path=None):
     ax.tick_params(axis='x', labelsize=12.5, pad=10)
     ax.tick_params(axis='y', labelsize=12.5, pad=10)
     ax.set_title('Classification Scores', size=20, pad=15)
+
+    if path is None:
+        plt.show()
+    else:
+        plt.savefig(path)
+        plt.close(fig)
+
+
+def visualize_roc_curve(roc_curves, path=None):
+
+    """
+    Visualize ROC curve of multiple models with confidence intervals
+
+    Parameters
+    ----------
+    roc_curves (np.ndarray of shape (n_models, 3, n_thresholds)): Array of ROC curves of multiple models
+    path (str or None): Path of the output file (if path is None, plot is displayed with selected backend)
+    """
+
+    false_positive_rates = roc_curves[:, 0]
+    true_positive_rates = roc_curves[:, 1]
+    true_positive_rates_interpolated = []
+    aucs = []
+    mean_false_positive_rate = np.linspace(0, 1, 100)
+
+    fig, ax = plt.subplots(figsize=(16, 16))
+
+    # Plot random guess curve
+    ax.plot([0, 1], [0, 1], linestyle='--', lw=2.5, color='r', alpha=0.8)
+    # Plot individual ROC curves of multiple models
+    for i, (false_positive_rate, true_positive_rate) in enumerate(zip(false_positive_rates, true_positive_rates), 1):
+        true_positive_rates_interpolated.append(np.interp(mean_false_positive_rate, false_positive_rate, true_positive_rate))
+        true_positive_rates_interpolated[-1][0] = 0.0
+        roc_auc = auc(false_positive_rate, true_positive_rate)
+        aucs.append(roc_auc)
+        ax.plot(false_positive_rate, true_positive_rate, lw=1, alpha=0.1)
+
+    # Plot mean ROC curve of N models
+    mean_tpr = np.mean(true_positive_rates_interpolated, axis=0)
+    mean_tpr[-1] = 1.0
+    mean_auc = auc(mean_false_positive_rate, mean_tpr)
+    std_auc = np.std(aucs)
+    ax.plot(mean_false_positive_rate, mean_tpr, color='b', label=f'Mean ROC Curve (AUC: {mean_auc:.4f} ±{std_auc:.4f})', lw=2.5, alpha=0.9)
+
+    # Plot confidence interval of ROC curves
+    std_tpr = np.std(true_positive_rates_interpolated, axis=0)
+    tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+    tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+    ax.fill_between(mean_false_positive_rate, tprs_lower, tprs_upper, color='grey', alpha=0.2, label='±1 sigma')
+
+    ax.set_xlabel('False Positive Rate', size=15, labelpad=12)
+    ax.set_ylabel('True Positive Rate', size=15, labelpad=12)
+    ax.tick_params(axis='x', labelsize=15)
+    ax.tick_params(axis='y', labelsize=15)
+    ax.set_xlim([-0.05, 1.05])
+    ax.set_ylim([-0.05, 1.05])
+    ax.set_title('ROC Curve', size=20, pad=15)
+    ax.legend(loc='lower right', prop={'size': 14})
 
     if path is None:
         plt.show()
