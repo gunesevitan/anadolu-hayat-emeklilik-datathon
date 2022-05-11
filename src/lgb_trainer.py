@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.metrics import roc_curve
 import lightgbm as lgb
 
 import settings
@@ -30,6 +31,7 @@ class LightGBMTrainer:
 
         print(f'{"-" * 30}\nRunning LightGBM Model for Training\n{"-" * 30}\n')
         scores = []
+        roc_curves = []
         df_test['lgb_predictions'] = 0
         df_feature_importance = pd.DataFrame(
             data=np.zeros((len(self.features), df_train['fold'].nunique())),
@@ -41,7 +43,7 @@ class LightGBMTrainer:
 
             # Get training and validation sets
             trn_idx, val_idx = df_train.loc[df_train['fold'] != fold].index, df_train.loc[df_train['fold'] == fold].index
-            print(f'Fold {fold} - Training: {df_train.loc[trn_idx].shape} Validation: {df_train.loc[val_idx].shape} - Seed: {self.model_parameters["seed"]}')
+            print(f'Fold {fold} - Training: {df_train.loc[trn_idx, self.features].shape} Validation: {df_train.loc[val_idx, self.features].shape} - Seed: {self.model_parameters["seed"]}')
             trn_dataset = lgb.Dataset(df_train.loc[trn_idx, self.features], label=df_train.loc[trn_idx, self.target], categorical_feature=self.categorical_features)
             val_dataset = lgb.Dataset(df_train.loc[val_idx, self.features], label=df_train.loc[val_idx, self.target], categorical_feature=self.categorical_features)
 
@@ -74,6 +76,8 @@ class LightGBMTrainer:
             )
             scores.append(val_scores)
             print(f'\nLightGBM Validation Scores: {val_scores}\n')
+            val_roc_curve = roc_curve(y_true=df_train.loc[val_idx, self.target], y_score=df_train.loc[val_idx, 'lgb_predictions'])
+            roc_curves.append(val_roc_curve)
 
             test_predictions = model.predict(df_test[self.features])
             df_test['lgb_predictions'] += (test_predictions / df_train['fold'].nunique())
@@ -97,4 +101,11 @@ class LightGBMTrainer:
         visualization.visualize_feature_importance(
             df_feature_importance=df_feature_importance,
             path=settings.MODELS / 'lightgbm' / f'feature_importance_seed{self.model_parameters["seed"]}.png'
+        )
+
+        # Visualize ROC curves
+        roc_curves = np.array(roc_curves, dtype=object)
+        visualization.visualize_roc_curve(
+            roc_curves=roc_curves,
+            path=settings.MODELS / 'lightgbm' / f'roc_curve_seed{self.model_parameters["seed"]}.png'
         )
