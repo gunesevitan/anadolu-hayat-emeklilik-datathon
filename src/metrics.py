@@ -1,5 +1,10 @@
+import json
 import numpy as np
+import pandas as pd
 from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.utils.class_weight import compute_class_weight, compute_sample_weight
+
+import settings
 
 
 def round_probabilities(probabilities, threshold):
@@ -30,7 +35,7 @@ def specificity_score(y_true, y_pred):
 
     Parameters
     ----------
-    y_true (numpy.ndarray of shape (n_samples)): Ground truth
+    y_true (numpy.ndarray of shape (n_samples)): Ground truth labels
     y_pred (numpy.ndarray of shape (n_samples)): Predicted labels
 
     Returns
@@ -49,7 +54,7 @@ def classification_scores(y_true, y_pred, threshold=0.5):
 
     Parameters
     ----------
-    y_true (numpy.ndarray of shape (n_samples)): Ground truth
+    y_true (numpy.ndarray of shape (n_samples)): Ground truth labels
     y_pred (numpy.ndarray of shape (n_samples)): Predicted probabilities
     threshold (float): Rounding threshold
 
@@ -69,3 +74,35 @@ def classification_scores(y_true, y_pred, threshold=0.5):
     }
 
     return scores
+
+
+def calculate_weights(y):
+
+    """
+    Calculate sample and class weights from given labels
+
+    Parameters
+    ----------
+    y (numpy.ndarray of shape (n_samples)): Ground truth labels
+
+    Returns
+    -------
+    sample_weights (numpy.ndarray of shape (n_samples)): Sample weights of the given labels
+    class_weights (numpy.ndarray of shape (n_classes)): Class weights of the given labels
+    """
+
+    sample_weights = compute_sample_weight(class_weight='balanced', y=y)
+    class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y), y=y)
+
+    return sample_weights, class_weights
+
+
+if __name__ == '__main__':
+
+    df_train = pd.read_csv(settings.DATA / 'train.csv')
+
+    # Calculate class weights and write it as a json file
+    _, class_weights = calculate_weights(y=df_train['ARTIS_DURUMU'])
+    class_weights = {label: weight for label, weight in enumerate(class_weights)}
+    with open(settings.DATA / 'class_weights.json', 'w') as f:
+        json.dump(class_weights, f)
