@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_curve
 import lightgbm as lgb
+import imblearn.over_sampling
 
 import settings
 import metrics
@@ -10,13 +11,15 @@ import visualization
 
 class LightGBMTrainer:
 
-    def __init__(self, features, target, model_parameters, fit_parameters, categorical_features):
+    def __init__(self, features, target, model_parameters, fit_parameters, categorical_features, sampler_class, sampler_parameters):
 
         self.features = features
         self.target = target
         self.model_parameters = model_parameters
         self.fit_parameters = fit_parameters
         self.categorical_features = categorical_features
+        self.sampler_class = sampler_class
+        self.sampler_parameters = sampler_parameters
 
     def train_and_validate(self, df_train, df_test):
 
@@ -44,7 +47,16 @@ class LightGBMTrainer:
             # Get training and validation sets
             trn_idx, val_idx = df_train.loc[df_train['fold'] != fold].index, df_train.loc[df_train['fold'] == fold].index
             print(f'Fold {fold} - Training: {df_train.loc[trn_idx, self.features].shape} Validation: {df_train.loc[val_idx, self.features].shape} - Seed: {self.model_parameters["seed"]}')
-            trn_dataset = lgb.Dataset(df_train.loc[trn_idx, self.features], label=df_train.loc[trn_idx, self.target], categorical_feature=self.categorical_features)
+
+            if self.sampler_class is not None:
+                # Resample training set if sampler class is specified
+                sampler = getattr(imblearn.over_sampling, self.sampler_class)(**self.sampler_parameters)
+                trn_features_resampled, trn_labels_resampled = sampler.fit_resample(df_train.loc[trn_idx, self.features], df_train.loc[trn_idx, self.target])
+                trn_dataset = lgb.Dataset(trn_features_resampled, label=trn_labels_resampled, categorical_feature=self.categorical_features)
+                print(f'Resampled Training Features: {trn_features_resampled.shape} Labels: {trn_labels_resampled.shape}')
+            else:
+                trn_dataset = lgb.Dataset(df_train.loc[trn_idx, self.features], label=df_train.loc[trn_idx, self.target], categorical_feature=self.categorical_features)
+
             val_dataset = lgb.Dataset(df_train.loc[val_idx, self.features], label=df_train.loc[val_idx, self.target], categorical_feature=self.categorical_features)
 
             # Set model parameters, train parameters, callbacks and start training

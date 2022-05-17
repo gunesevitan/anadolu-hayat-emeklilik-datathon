@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_curve
 import xgboost as xgb
+import imblearn.over_sampling
 
 import settings
 import metrics
@@ -10,12 +11,14 @@ import visualization
 
 class XGBoostTrainer:
 
-    def __init__(self, features, target, model_parameters, fit_parameters):
+    def __init__(self, features, target, model_parameters, fit_parameters, sampler_class, sampler_parameters):
 
         self.features = features
         self.target = target
         self.model_parameters = model_parameters
         self.fit_parameters = fit_parameters
+        self.sampler_class = sampler_class
+        self.sampler_parameters = sampler_parameters
 
     def train_and_validate(self, df_train, df_test):
 
@@ -43,8 +46,17 @@ class XGBoostTrainer:
             # Get training and validation sets
             trn_idx, val_idx = df_train.loc[df_train['fold'] != fold].index, df_train.loc[df_train['fold'] == fold].index
             print(f'Fold {fold} - Training: {df_train.loc[trn_idx, self.features].shape} Validation: {df_train.loc[val_idx, self.features].shape} - Seed: {self.model_parameters["seed"]}')
-            trn_dataset = xgb.DMatrix(df_train.loc[trn_idx, self.features], label=df_train.loc[trn_idx, self.target])
-            val_dataset = xgb.DMatrix(df_train.loc[val_idx, self.features], label=df_train.loc[val_idx, self.target])
+
+            if self.sampler_class is not None:
+                # Resample training set if sampler class is specified
+                sampler = getattr(imblearn.over_sampling, self.sampler_class)(**self.sampler_parameters)
+                trn_features_resampled, trn_labels_resampled = sampler.fit_resample(df_train.loc[trn_idx, self.features], df_train.loc[trn_idx, self.target])
+                trn_dataset = xgb.DMatrix(df_train.loc[trn_idx, self.features].astype(np.float32), label=df_train.loc[trn_idx, self.target])
+                print(f'Resampled Training Features: {trn_features_resampled.shape} Labels: {trn_labels_resampled.shape}')
+            else:
+                trn_dataset = xgb.DMatrix(df_train.loc[trn_idx, self.features].astype(np.float32), label=df_train.loc[trn_idx, self.target])
+                
+            val_dataset = xgb.DMatrix(df_train.loc[val_idx, self.features].astype(np.float32), label=df_train.loc[val_idx, self.target])
 
             # Set model parameters, train parameters, callbacks and start training
             model = xgb.train(
@@ -60,7 +72,7 @@ class XGBoostTrainer:
             for feature, importance in model.get_score(importance_type='gain').items():
                 df_feature_importance.loc[feature, f'fold_{fold}_importance'] = importance
 
-            val_predictions = model.predict(xgb.DMatrix(df_train.loc[val_idx, self.features]))
+            val_predictions = model.predict(xgb.DMatrix(df_train.loc[val_idx, self.features].astype(np.float32)))
             df_train.loc[val_idx, 'xgb_predictions'] = val_predictions
             val_scores = metrics.classification_scores(
                 y_true=df_train.loc[val_idx, self.target],
@@ -72,7 +84,7 @@ class XGBoostTrainer:
             val_roc_curve = roc_curve(y_true=df_train.loc[val_idx, self.target], y_score=df_train.loc[val_idx, 'xgb_predictions'])
             roc_curves.append(val_roc_curve)
 
-            test_predictions = model.predict(xgb.DMatrix(df_test[self.features]))
+            test_predictions = model.predict(xgb.DMatrix(df_test[self.features].astype(np.float32)))
             df_test['xgb_predictions'] += (test_predictions / df_train['fold'].nunique())
 
         # Display and visualize scores of validation sets
