@@ -1,0 +1,7 @@
+data/
+models/
+venv/
+.idea/
+*.pyc
+*.pt
+*.pth
